@@ -1,14 +1,14 @@
 {
-  "name": "Recife Condo Atlas",
-  "short_name": "Condo Atlas",
-  "description": "Immobilienatlas für Piedade und Candeias",
-  "start_url": "./index.html",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#eef3f2",
-  "theme_color": "#075f5c",
-  "lang": "de-DE",
-  "icons": [
+  "name":"Recife Condo Atlas",
+  "short_name":"Condo Atlas",
+  "description":"Gebäude- und Angebotsatlas für Piedade und Candeias.",
+  "start_url":"./",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#edf3f2",
+  "theme_color":"#075f5c",
+  "orientation":"any",
+  "icons":[
     {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
     {"src":"icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
   ]

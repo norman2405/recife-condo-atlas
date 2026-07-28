@@ -1,125 +1,90 @@
 'use strict';
-const money = value => value == null ? 'k. A.' : new Intl.NumberFormat('de-DE',{style:'currency',currency:'BRL',maximumFractionDigits:0}).format(value);
-const number = value => value == null ? 'k. A.' : new Intl.NumberFormat('de-DE',{maximumFractionDigits:0}).format(value);
-const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-let buildings=[], listings=[], summary=[], deferredPrompt=null, currentListingFilter=null;
+const money=v=>v==null||v===''?'k. A.':new Intl.NumberFormat('de-DE',{style:'currency',currency:'BRL',maximumFractionDigits:0}).format(Number(v));
+const number=(v,d=0)=>v==null||v===''?'k. A.':new Intl.NumberFormat('de-DE',{maximumFractionDigits:d}).format(Number(v));
+const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const byId=id=>document.getElementById(id);
+let buildings=[],listings=[],summary=[],brokers=[],deferredPrompt=null,currentListingFilter=null;
+const summaryMap=new Map();
 const favorites=()=>JSON.parse(localStorage.getItem('condoAtlasFavorites')||'[]');
-const saveFavorites=value=>localStorage.setItem('condoAtlasFavorites',JSON.stringify(value));
-
+const saveFavorites=v=>localStorage.setItem('condoAtlasFavorites',JSON.stringify(v));
+const text=v=>String(v??'').toLowerCase();
 function toast(message){const el=byId('toast');el.textContent=message;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),1800)}
 function facts(items){return `<div class="facts">${items.filter(Boolean).map(x=>`<span class="pill">${esc(x)}</span>`).join('')}</div>`}
-function buildingSummary(id){return summary.find(x=>Number(x.building_id)===Number(id))||{}}
+function buildingSummary(id){return summaryMap.get(Number(id))||{}}
 function isFavorite(id){return favorites().includes(Number(id))}
-
-async function getJson(path){const response=await fetch(path);if(!response.ok)throw new Error(`${path}: ${response.status}`);return response.json()}
+async function getJson(path){const response=await fetch(path,{cache:'no-cache'});if(!response.ok)throw new Error(`${path}: ${response.status}`);return response.json()}
+function seaText(b){return text(b.sea_view_balcony_text).includes('meer')||text(b.sea_view_balcony_text).includes('mar')}
+function floorLabel(l){if(l.floor_number)return `${l.floor_number}. Stock`;if(l.high_floor)return 'Hohe Etage';return l.floor_text||null}
+function listingDate(l){return l.observed_date||l.listing_date||l.created_at||''}
+function calcMedian(values){const a=values.filter(Number.isFinite).sort((x,y)=>x-y);if(!a.length)return null;const m=Math.floor(a.length/2);return a.length%2?a[m]:(a[m-1]+a[m])/2}
 async function init(){
   try{
-    [buildings,listings,summary]=await Promise.all([
-      getJson('data/buildings.json'), getJson('data/listings.json'), getJson('data/summary.json')
-    ]);
-    listings.sort((a,b)=>String(b.observed_date||b.listing_date||'').localeCompare(String(a.observed_date||a.listing_date||'')));
-    renderAll();
-  }catch(error){
-    console.error(error);document.querySelector('main').innerHTML='<div class="panel"><h2>Daten konnten nicht geladen werden</h2><p>Die App muss über GitHub Pages oder einen Webserver geöffnet werden. Lokales Antippen der HTML-Datei reicht nicht aus.</p></div>';
-  }
+    [buildings,listings,summary,brokers]=await Promise.all(['data/buildings.json','data/listings.json','data/summary.json','data/brokers.json'].map(getJson));
+    summary.forEach(s=>summaryMap.set(Number(s.building_id),s));
+    listings.sort((a,b)=>String(listingDate(b)).localeCompare(String(listingDate(a))));
+    populateCompare();applySavedTheme();renderAll();
+  }catch(error){console.error(error);document.querySelector('main').innerHTML='<div class="panel"><h2>Daten konnten nicht geladen werden</h2><p>Bitte über GitHub Pages öffnen und prüfen, ob der Ordner <code>data</code> vollständig hochgeladen wurde.</p></div>'}
 }
-
-function renderAll(){
-  const underBudget=listings.filter(x=>Number(x.asking_price_brl)<=800000).length;
-  const fourPlus=listings.filter(x=>Number(x.bedrooms)>=4).length;
-  byId('kpis').innerHTML=[['Gebäude',buildings.length],['Anzeigen',listings.length],['bis R$ 800.000',underBudget],['4+ Schlafzimmer',fourPlus]].map(([label,value])=>`<div class="kpi"><strong>${number(value)}</strong><span>${label}</span></div>`).join('');
-  renderBuildings();renderListings();renderFavorites();renderHomeMatches();
+function renderAll(){renderKpis();renderBuildings();renderListings();renderFavorites();renderHomeMatches();renderMarketBars();renderCompare();}
+function renderKpis(){
+ const priced=listings.filter(l=>Number(l.asking_price_brl)>0);const prices=priced.map(l=>Number(l.asking_price_brl));
+ const values=[['Gebäude',buildings.length],['Anzeigen',listings.length],['Median Angebot',money(calcMedian(prices))],['Mit Preis ≤ R$ 800.000',priced.filter(l=>Number(l.asking_price_brl)<=800000).length]];
+ byId('kpis').innerHTML=values.map(([label,value])=>`<div class="kpi"><strong>${typeof value==='number'?number(value):value}</strong><span>${label}</span></div>`).join('');
 }
-
 function buildingCard(b){
-  const s=buildingSummary(b.building_id);const fav=isFavorite(b.building_id);
-  return `<article class="card">
-    <h3>${esc(b.name)}</h3>
-    <div class="sub">${esc(b.district||'')} · ${esc(b.address||'Adresse offen')}</div>
-    ${facts([b.completion_year&&`Baujahr ${b.completion_year}`,b.typical_area_m2&&`typ. ${number(b.typical_area_m2)} m²`,b.max_bedrooms&&`bis ${b.max_bedrooms} Schlafzimmer`,Number(b.has_pool)===1?'Pool':null])}
-    <div class="price">${s.avg_asking_price_brl?`Ø ${money(s.avg_asking_price_brl)}`:'Preis noch offen'}</div>
-    <div class="sub">${number(s.listing_count||0)} erfasste Anzeigen</div>
-    <div class="actions"><button class="action" data-building-detail="${b.building_id}">Details</button><button class="secondary favorite ${fav?'active':''}" data-favorite="${b.building_id}">${fav?'★ Favorit':'☆ Favorit'}</button></div>
-  </article>`;
+ const s=buildingSummary(b.building_id),fav=isFavorite(b.building_id),linked=Number(s.listing_count||0);
+ return `<article class="card"><h3>${esc(b.name)}</h3><div class="sub">${esc(b.district||'')} · ${esc(b.address||'Adresse offen')}</div>
+ ${facts([b.completion_year&&`Baujahr ${b.completion_year}`,b.typical_area_m2&&`typ. ${number(b.typical_area_m2)} m²`,b.max_bedrooms&&`bis ${b.max_bedrooms} Schlafzimmer`,Number(b.has_pool)===1?'Pool':null,seaText(b)?'Meerblick erwähnt':null])}
+ <div class="price">${s.avg_asking_price_brl?`Ø ${money(s.avg_asking_price_brl)}`:'Preis noch offen'}</div><div class="sub">${number(linked)} erfasste Anzeigen${s.avg_price_per_m2_brl?` · Ø ${money(s.avg_price_per_m2_brl)}/m²`:''}</div>
+ <div class="actions"><button class="action" data-building-detail="${b.building_id}">Details</button><button class="secondary favorite ${fav?'active':''}" data-favorite="${b.building_id}">${fav?'★ Gespeichert':'☆ Merken'}</button></div></article>`;
 }
-
-function listingCard(l, compact=false){
-  const floor=l.floor_number?`${l.floor_number}. Stock`:l.floor_text;
-  return `<article class="card">
-    <h3>${esc(l.building_name_raw||'Gebäude nicht zugeordnet')}</h3>
-    <div class="sub">${esc(l.district||'')} · ${esc(l.portal_broker||l.source_name||'Quelle offen')}</div>
-    <div class="price">${money(l.asking_price_brl)}</div>
-    ${facts([l.area_m2&&`${number(l.area_m2)} m²`,l.bedrooms&&`${l.bedrooms} Schlafzimmer`,floor,Number(l.has_balcony)===1?'Varanda':null,Number(l.has_sea_view)===1?'Meerblick':null])}
-    ${!compact&&l.price_per_m2_brl?`<div class="sub">${money(l.price_per_m2_brl)}/m²</div>`:''}
-    <div class="actions">${l.url?`<a class="action" href="${esc(l.url)}" target="_blank" rel="noopener" style="text-decoration:none">Anzeige öffnen</a>`:''}<button class="secondary" data-listing-detail="${l.listing_id}">Details</button></div>
-  </article>`;
+function listingCard(l,compact=false){
+ const price=Number(l.asking_price_brl),area=Number(l.area_m2),ppm=Number(l.price_per_m2_brl)||(price&&area?price/area:null);
+ return `<article class="card"><h3>${esc(l.building_name_raw||'Gebäude nicht zugeordnet')}</h3><div class="sub">${esc(l.district||'')} · ${esc(l.portal_broker||l.source_name||'Quelle offen')}</div>
+ <div class="price">${money(price||null)}</div>${facts([area&&`${number(area)} m²`,l.bedrooms&&`${l.bedrooms} Schlafzimmer`,floorLabel(l),Number(l.has_balcony)===1?'Varanda':null,Number(l.has_sea_view)===1?'Meerblick':null])}
+ ${!compact&&ppm?`<div class="sub">${money(ppm)}/m²${listingDate(l)?` · Stand ${esc(String(listingDate(l)).slice(0,10))}`:''}</div>`:''}
+ <div class="actions">${l.url?`<a class="action" href="${esc(l.url)}" target="_blank" rel="noopener">Anzeige öffnen</a>`:''}<button class="secondary" data-listing-detail="${l.listing_id}">Details</button></div></article>`;
 }
-
-function renderBuildings(){
-  const query=byId('buildingSearch').value.trim().toLowerCase();const district=byId('buildingDistrict').value;
-  const result=buildings.filter(b=>(!district||b.district===district)&&`${b.name} ${b.address||''}`.toLowerCase().includes(query));
-  byId('buildingCount').textContent=`${number(result.length)} Treffer`;
-  byId('buildingList').innerHTML=result.length?result.map(buildingCard).join(''):'<div class="empty">Keine Gebäude gefunden.</div>';
+function getFilteredBuildings(){
+ const q=text(byId('buildingSearch').value),district=byId('buildingDistrict').value,pool=byId('buildingPool').checked,four=byId('buildingFourBeds').checked,sea=byId('buildingSea').checked,withListings=byId('buildingWithListings').checked;
+ let result=buildings.filter(b=>(!district||b.district===district)&&(!pool||Number(b.has_pool)===1)&&(!four||Number(b.max_bedrooms)>=4)&&(!sea||seaText(b))&&(!withListings||Number(buildingSummary(b.building_id).listing_count)>0)&&`${b.name} ${b.address||''} ${b.pool_text||''} ${b.sea_view_balcony_text||''}`.toLowerCase().includes(q));
+ const sort=byId('buildingSort').value;
+ const val=(b,key)=>Number(buildingSummary(b.building_id)[key]||0);
+ result.sort((a,b)=>sort==='priceAsc'?val(a,'avg_asking_price_brl')-val(b,'avg_asking_price_brl'):sort==='priceDesc'?val(b,'avg_asking_price_brl')-val(a,'avg_asking_price_brl'):sort==='areaDesc'?Number(b.typical_area_m2||0)-Number(a.typical_area_m2||0):sort==='yearDesc'?Number(b.completion_year||0)-Number(a.completion_year||0):sort==='listingsDesc'?val(b,'listing_count')-val(a,'listing_count'):a.name.localeCompare(b.name,'de'));
+ if(sort==='priceAsc')result.sort((a,b)=>{const av=val(a,'avg_asking_price_brl')||Infinity,bv=val(b,'avg_asking_price_brl')||Infinity;return av-bv});
+ return result;
 }
-function renderListings(){
-  const query=byId('listingSearch').value.trim().toLowerCase();const district=byId('listingDistrict').value;
-  const source=currentListingFilter||listings;
-  const result=source.filter(l=>(!district||l.district===district)&&`${l.building_name_raw||''} ${l.portal_broker||''}`.toLowerCase().includes(query));
-  byId('listingCount').textContent=`${number(result.length)} Treffer`;
-  byId('listingList').innerHTML=result.length?result.map(listingCard).join(''):'<div class="empty">Keine Anzeigen gefunden.</div>';
+function renderBuildings(){const result=getFilteredBuildings();byId('buildingCount').textContent=`${number(result.length)} Treffer`;byId('buildingList').innerHTML=result.length?result.map(buildingCard).join(''):'<div class="empty">Keine Gebäude gefunden.</div>'}
+function getFilteredListings(){
+ const q=text(byId('listingSearch').value),district=byId('listingDistrict').value,max=Number(byId('listingMaxPrice').value)||Infinity,minArea=Number(byId('listingMinArea').value)||0,minBeds=Number(byId('listingMinBeds').value)||0,minFloor=Number(byId('listingMinFloor').value)||0,sea=byId('listingSea').checked,balcony=byId('listingBalcony').checked;
+ let result=(currentListingFilter||listings).filter(l=>(!district||l.district===district)&&`${l.building_name_raw||''} ${l.portal_broker||''} ${l.source_name||''}`.toLowerCase().includes(q)&&(Number(l.asking_price_brl)||Infinity)<=max&&(Number(l.area_m2)||0)>=minArea&&(Number(l.bedrooms)||0)>=minBeds&&(!minFloor||Number(l.floor_number)>=minFloor||Number(l.high_floor)===1)&&(!sea||Number(l.has_sea_view)===1)&&(!balcony||Number(l.has_balcony)===1));
+ const sort=byId('listingSort').value,ppm=l=>Number(l.price_per_m2_brl)||(Number(l.asking_price_brl)&&Number(l.area_m2)?Number(l.asking_price_brl)/Number(l.area_m2):0);
+ result.sort((a,b)=>sort==='priceAsc'?Number(a.asking_price_brl||Infinity)-Number(b.asking_price_brl||Infinity):sort==='priceDesc'?Number(b.asking_price_brl||0)-Number(a.asking_price_brl||0):sort==='ppmAsc'?(ppm(a)||Infinity)-(ppm(b)||Infinity):sort==='areaDesc'?Number(b.area_m2||0)-Number(a.area_m2||0):String(listingDate(b)).localeCompare(String(listingDate(a))));
+ return result;
 }
-function renderFavorites(){
-  const ids=favorites();const result=buildings.filter(b=>ids.includes(Number(b.building_id)));
-  byId('favoriteList').innerHTML=result.length?result.map(buildingCard).join(''):'<div class="empty">Noch keine Favoriten gespeichert.</div>';
-}
-function matchingListings(){
-  const max=Number(byId('maxPrice').value)||Infinity;const beds=Number(byId('minBeds').value)||0;const floor=Number(byId('minFloor').value)||0;
-  return listings.filter(l=>(Number(l.asking_price_brl)||Infinity)<=max&&(Number(l.bedrooms)||0)>=beds&&(!byId('seaView').checked||Number(l.has_sea_view)===1)&&(!byId('balcony').checked||Number(l.has_balcony)===1)&&(!floor||Number(l.floor_number)>=floor||Number(l.high_floor)===1));
-}
-function renderHomeMatches(){const result=matchingListings().slice(0,6);byId('homeMatches').innerHTML=result.length?result.map(x=>listingCard(x,true)).join(''):'<div class="empty">Aktuell keine vollständig passenden Treffer in diesem Datenstand.</div>'}
-
-function toggleFavorite(id){let values=favorites();const numberId=Number(id);if(values.includes(numberId)){values=values.filter(x=>x!==numberId);toast('Favorit entfernt')}else{values.push(numberId);toast('Favorit gespeichert')}saveFavorites(values);renderBuildings();renderFavorites()}
-function showBuilding(id){
-  const b=buildings.find(x=>Number(x.building_id)===Number(id));if(!b)return;const s=buildingSummary(id);const linked=listings.filter(x=>Number(x.building_id)===Number(id));
-  byId('detailContent').innerHTML=`<span class="eyebrow dark">Gebäude</span><h2>${esc(b.name)}</h2><p class="sub">${esc(b.address||'Adresse offen')} · ${esc(b.district||'')}</p>
-    ${facts([b.completion_year&&`Baujahr ${b.completion_year}`,b.typical_area_m2&&`typ. ${number(b.typical_area_m2)} m²`,b.max_known_area_m2&&`max. ${number(b.max_known_area_m2)} m²`,b.max_bedrooms&&`bis ${b.max_bedrooms} Schlafzimmer`,Number(b.has_pool)===1?'Pool':null])}
-    <div class="panel"><div class="price">${s.avg_asking_price_brl?`Ø ${money(s.avg_asking_price_brl)}`:'Preis noch offen'}</div><div class="sub">${number(s.listing_count||0)} Anzeigen · Ø ${money(s.avg_price_per_m2_brl)}/m²</div></div>
-    <h3>Zugeordnete Anzeigen</h3><div class="detail-listings">${linked.length?linked.map(x=>listingCard(x,true)).join(''):'<p class="sub">Keine Anzeigen zugeordnet.</p>'}</div>`;
-  byId('detailDialog').showModal();
-}
-function showListing(id){
-  const l=listings.find(x=>Number(x.listing_id)===Number(id));if(!l)return;
-  byId('detailContent').innerHTML=`<span class="eyebrow dark">Anzeige</span><h2>${esc(l.building_name_raw||'Wohnung')}</h2><div class="price">${money(l.asking_price_brl)}</div>${facts([l.area_m2&&`${number(l.area_m2)} m²`,l.bedrooms&&`${l.bedrooms} Schlafzimmer`,l.floor_number&&`${l.floor_number}. Stock`,Number(l.has_balcony)===1?'Varanda':null,Number(l.has_sea_view)===1?'Meerblick':null])}<p>${esc(l.notes||'')}</p>${l.url?`<a class="action" href="${esc(l.url)}" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">Quelle öffnen</a>`:''}`;
-  byId('detailDialog').showModal();
-}
-function switchView(id){document.querySelectorAll('.view,.tab').forEach(el=>el.classList.remove('active'));byId(id).classList.add('active');document.querySelector(`.tab[data-view="${id}"]`).classList.add('active');window.scrollTo({top:0,behavior:'smooth'})}
-
-document.addEventListener('click',event=>{
-  const detail=event.target.closest('[data-building-detail]');if(detail)showBuilding(detail.dataset.buildingDetail);
-  const listing=event.target.closest('[data-listing-detail]');if(listing)showListing(listing.dataset.listingDetail);
-  const fav=event.target.closest('[data-favorite]');if(fav)toggleFavorite(fav.dataset.favorite);
-  const tab = event.target.closest('.tab');
-
-if (tab) {
-  if (tab.dataset.view === 'listingsView') {
-    currentListingFilter = null;
-    byId('listingSearch').value = '';
-    byId('listingDistrict').value = '';
-    renderListings();
-  }
-
-  switchView(tab.dataset.view);
-}
-});
-byId('buildingSearch').addEventListener('input',renderBuildings);byId('buildingDistrict').addEventListener('change',renderBuildings);
-byId('listingSearch').addEventListener('input',renderListings);byId('listingDistrict').addEventListener('change',renderListings);
+function renderListings(){const result=getFilteredListings();byId('listingCount').textContent=`${number(result.length)} Treffer`;byId('listingList').innerHTML=result.length?result.map(l=>listingCard(l)).join(''):'<div class="empty">Keine Anzeigen gefunden.</div>';byId('activeFilterNotice').hidden=!currentListingFilter;byId('activeFilterNotice').innerHTML=currentListingFilter?`Suchprofil aktiv: ${number(currentListingFilter.length)} passende Anzeigen. <button class="text-button" id="clearProfileFilter">Alle Anzeigen zeigen</button>`:''}
+function matchingListings(){const max=Number(byId('maxPrice').value)||Infinity,beds=Number(byId('minBeds').value)||0,floor=Number(byId('minFloor').value)||0;return listings.filter(l=>(Number(l.asking_price_brl)||Infinity)<=max&&(Number(l.bedrooms)||0)>=beds&&(!byId('seaView').checked||Number(l.has_sea_view)===1)&&(!byId('balcony').checked||Number(l.has_balcony)===1)&&(!floor||Number(l.floor_number)>=floor||Number(l.high_floor)===1))}
+function renderHomeMatches(){const result=matchingListings();byId('matchPreview').textContent=`${number(result.length)} Treffer im aktuellen Datenstand`;byId('homeMatches').innerHTML=result.length?result.slice(0,6).map(l=>listingCard(l,true)).join(''):'<div class="empty">Aktuell keine vollständig passenden Treffer.</div>'}
+function renderFavorites(){const ids=favorites(),result=buildings.filter(b=>ids.includes(Number(b.building_id)));byId('favoriteCount').textContent=`${number(result.length)} gespeichert`;byId('favoriteList').innerHTML=result.length?result.map(buildingCard).join(''):'<div class="empty">Noch keine Favoriten gespeichert.</div>';byId('homeFavorites').innerHTML=result.length?result.slice(0,5).map(b=>`<button class="compact-item text-button" data-building-detail="${b.building_id}"><span>${esc(b.name)}</span><strong>${esc(b.district||'')}</strong></button>`).join(''):'<p class="muted">Mit ☆ Merken speicherst du Gebäude hier.</p>'}
+function toggleFavorite(id){let values=favorites(),n=Number(id);values=values.includes(n)?values.filter(x=>x!==n):[...values,n];saveFavorites(values);toast(values.includes(n)?'Favorit gespeichert':'Favorit entfernt');renderBuildings();renderFavorites()}
+function renderMarketBars(){const groups=['Piedade','Candeias'].map(d=>{const vals=listings.filter(l=>l.district===d&&Number(l.asking_price_brl)>0).map(l=>Number(l.asking_price_brl));return {name:d,median:calcMedian(vals),count:vals.length}});const max=Math.max(...groups.map(g=>g.median||0),1);byId('marketBars').innerHTML=groups.map(g=>`<div class="market-row"><strong>${g.name}</strong><div class="bar-track"><div class="bar" style="width:${Math.max(3,(g.median||0)/max*100)}%"></div></div><span>${g.median?money(g.median):'k. A.'}<small class="sub"> · ${g.count}</small></span></div>`).join('')}
+function showBuilding(id){const b=buildings.find(x=>Number(x.building_id)===Number(id));if(!b)return;const s=buildingSummary(id),linked=listings.filter(x=>Number(x.building_id)===Number(id));const mapQuery=encodeURIComponent(`${b.name} ${b.address||''} ${b.district||''} Jaboatão dos Guararapes`);byId('detailContent').innerHTML=`<span class="eyebrow">Gebäude</span><h2>${esc(b.name)}</h2><p class="sub">${esc(b.address||'Adresse offen')} · ${esc(b.district||'')}</p>${facts([b.completion_year&&`Baujahr ${b.completion_year}`,b.typical_area_m2&&`typ. ${number(b.typical_area_m2)} m²`,b.max_known_area_m2&&`max. ${number(b.max_known_area_m2)} m²`,b.max_bedrooms&&`bis ${b.max_bedrooms} Schlafzimmer`,Number(b.has_pool)===1?'Pool':null,seaText(b)?'Meerblick erwähnt':null])}<div class="panel"><div class="price">${s.avg_asking_price_brl?`Ø ${money(s.avg_asking_price_brl)}`:'Preis noch offen'}</div><div class="sub">${number(s.listing_count||0)} Anzeigen · Ø ${money(s.avg_price_per_m2_brl)}/m²</div></div><div class="actions"><a class="secondary" href="https://www.google.com/maps/search/?api=1&query=${mapQuery}" target="_blank" rel="noopener">Auf Karte öffnen</a>${b.source_url?`<a class="secondary" href="${esc(b.source_url)}" target="_blank" rel="noopener">Gebäudequelle</a>`:''}</div><h3>Zugeordnete Anzeigen</h3><div class="detail-listings">${linked.length?linked.map(x=>listingCard(x,true)).join(''):'<p class="sub">Keine Anzeigen zugeordnet.</p>'}</div>`;byId('detailDialog').showModal()}
+function showListing(id){const l=listings.find(x=>Number(x.listing_id)===Number(id));if(!l)return;byId('detailContent').innerHTML=`<span class="eyebrow">Anzeige</span><h2>${esc(l.building_name_raw||'Wohnung')}</h2><div class="price">${money(l.asking_price_brl)}</div>${facts([l.area_m2&&`${number(l.area_m2)} m²`,l.bedrooms&&`${l.bedrooms} Schlafzimmer`,floorLabel(l),Number(l.has_balcony)===1?'Varanda':null,Number(l.has_sea_view)===1?'Meerblick':null])}<p>${esc(l.notes||'')}</p><p class="sub">${esc(l.portal_broker||l.source_name||'Quelle offen')}${listingDate(l)?` · Stand ${esc(String(listingDate(l)).slice(0,10))}`:''}</p>${l.url?`<a class="action" href="${esc(l.url)}" target="_blank" rel="noopener">Quelle öffnen</a>`:''}`;byId('detailDialog').showModal()}
+function populateCompare(){const opts=buildings.slice().sort((a,b)=>a.name.localeCompare(b.name,'de')).map(b=>`<option value="${b.building_id}">${esc(b.name)} (${esc(b.district||'')})</option>`).join('');byId('compareA').innerHTML=opts;byId('compareB').innerHTML=opts;const fav=favorites();byId('compareA').value=String(fav[0]||buildings[0]?.building_id||'');byId('compareB').value=String(fav[1]||buildings[1]?.building_id||'')}
+function compareCard(b){if(!b)return'';const s=buildingSummary(b.building_id);return `<article class="compare-card"><h2>${esc(b.name)}</h2><p class="sub">${esc(b.district||'')} · ${esc(b.address||'Adresse offen')}</p><table class="metric-table"><tr><td>Baujahr</td><td>${b.completion_year||'k. A.'}</td></tr><tr><td>Typische Fläche</td><td>${b.typical_area_m2?`${number(b.typical_area_m2)} m²`:'k. A.'}</td></tr><tr><td>Größte bekannte Fläche</td><td>${b.max_known_area_m2?`${number(b.max_known_area_m2)} m²`:'k. A.'}</td></tr><tr><td>Schlafzimmer</td><td>${b.max_bedrooms?`bis ${b.max_bedrooms}`:'k. A.'}</td></tr><tr><td>Pool</td><td>${Number(b.has_pool)===1?'Ja':'nicht bestätigt'}</td></tr><tr><td>Anzeigen</td><td>${number(s.listing_count||0)}</td></tr><tr><td>Ø Angebotspreis</td><td>${money(s.avg_asking_price_brl)}</td></tr><tr><td>Ø Preis/m²</td><td>${money(s.avg_price_per_m2_brl)}</td></tr></table><div class="actions"><button class="action" data-building-detail="${b.building_id}">Details</button></div></article>`}
+function renderCompare(){const a=buildings.find(b=>Number(b.building_id)===Number(byId('compareA').value)),b=buildings.find(b=>Number(b.building_id)===Number(byId('compareB').value));byId('compareResult').innerHTML=compareCard(a)+compareCard(b)}
+function switchView(id){document.querySelectorAll('.view,.tab').forEach(el=>el.classList.remove('active'));byId(id)?.classList.add('active');document.querySelector(`.tab[data-view="${id}"]`)?.classList.add('active');if(id==='listingsView'&&!currentListingFilter)renderListings();window.scrollTo({top:0,behavior:'smooth'})}
+function resetListings(){['listingSearch','listingMaxPrice','listingMinArea','listingMinBeds','listingMinFloor'].forEach(id=>byId(id).value='');byId('listingDistrict').value='';byId('listingSort').value='newest';byId('listingSea').checked=false;byId('listingBalcony').checked=false;currentListingFilter=null;renderListings()}
+function applySavedTheme(){const saved=localStorage.getItem('condoAtlasTheme')||'light';document.documentElement.dataset.theme=saved;byId('themeButton').textContent=saved==='dark'?'☀':'◐'}
+function toggleTheme(){const next=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=next;localStorage.setItem('condoAtlasTheme',next);byId('themeButton').textContent=next==='dark'?'☀':'◐'}
+document.addEventListener('click',event=>{const detail=event.target.closest('[data-building-detail]');if(detail)showBuilding(detail.dataset.buildingDetail);const listing=event.target.closest('[data-listing-detail]');if(listing)showListing(listing.dataset.listingDetail);const fav=event.target.closest('[data-favorite]');if(fav)toggleFavorite(fav.dataset.favorite);const view=event.target.closest('[data-view-target]');if(view)switchView(view.dataset.viewTarget);const tab=event.target.closest('.tab');if(tab){if(tab.dataset.view==='listingsView'){currentListingFilter=null;renderListings()}switchView(tab.dataset.view)}if(event.target.id==='clearProfileFilter'){currentListingFilter=null;renderListings()}});
+['buildingSearch','buildingDistrict','buildingSort','buildingPool','buildingFourBeds','buildingSea','buildingWithListings'].forEach(id=>byId(id).addEventListener(id==='buildingSearch'?'input':'change',renderBuildings));
+['listingSearch','listingDistrict','listingSort','listingMaxPrice','listingMinArea','listingMinBeds','listingMinFloor','listingSea','listingBalcony'].forEach(id=>byId(id).addEventListener(id==='listingSearch'?'input':'change',renderListings));
 ['maxPrice','minBeds','minFloor','seaView','balcony'].forEach(id=>byId(id).addEventListener('change',renderHomeMatches));
 byId('showMatches').addEventListener('click',()=>{currentListingFilter=matchingListings();switchView('listingsView');renderListings()});
-byId('closeDialog').addEventListener('click',()=>byId('detailDialog').close());
-byId('detailDialog').addEventListener('click',event=>{if(event.target===byId('detailDialog'))byId('detailDialog').close()});
-window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredPrompt=event;byId('installButton').hidden=false});
-byId('installButton').addEventListener('click',async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;byId('installButton').hidden=true});
-window.addEventListener('appinstalled',()=>toast('App wurde installiert'));
-if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js'));
+byId('resetMatchFilters').addEventListener('click',()=>{byId('maxPrice').value=800000;byId('minBeds').value=4;byId('minFloor').value=6;byId('seaView').checked=true;byId('balcony').checked=true;renderHomeMatches()});
+byId('resetListingFilters').addEventListener('click',resetListings);byId('compareA').addEventListener('change',renderCompare);byId('compareB').addEventListener('change',renderCompare);byId('themeButton').addEventListener('click',toggleTheme);
+byId('closeDialog').addEventListener('click',()=>byId('detailDialog').close());byId('detailDialog').addEventListener('click',e=>{if(e.target===byId('detailDialog'))byId('detailDialog').close()});
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;byId('installButton').hidden=false});byId('installButton').addEventListener('click',async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;byId('installButton').hidden=true});window.addEventListener('appinstalled',()=>toast('App wurde installiert'));
+if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js'));
 init();

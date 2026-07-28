@@ -1,0 +1,14 @@
+RECIFE CONDO ATLAS – UPDATE AUF VERSION 2
+
+1. ZIP entpacken.
+2. Auf GitHub dein Repository norman2405/recife-condo-atlas öffnen.
+3. Add file > Upload files wählen.
+4. Den INHALT des Ordners Recife_Condo_Atlas_V2 hochladen – nicht den äußeren Ordner selbst.
+5. GitHub muss danach oben direkt index.html, app.js, styles.css, service-worker.js und manifest.webmanifest zeigen.
+6. Die Ordner data und icons müssen ebenfalls auf der obersten Ebene liegen.
+7. Commit message: Version 2 installieren.
+8. Nach 2–5 Minuten https://norman2405.github.io/recife-condo-atlas/ am Windows-PC öffnen und Strg+F5 drücken.
+9. Auf dem iPhone die bisherige App vom Home-Bildschirm löschen.
+10. Website in Safari öffnen, Teilen > Zum Home-Bildschirm.
+
+Hinweis: Wenn GitHub beim Upload vorhandene Ordner nicht zuverlässig ersetzt, lösche nur die alten Dateien app.js, index.html, styles.css, service-worker.js und manifest.webmanifest und lade diese fünf zuerst neu hoch. Die bestehenden data- und icons-Ordner können bleiben, da Version 2 dieselben Daten verwendet.

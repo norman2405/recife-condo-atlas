@@ -1,37 +1,25 @@
-# Recife Condo Atlas – Phase 1
+# Recife Condo Atlas – Version 2
 
-Dies ist eine echte statische Progressive Web App (PWA). Das Paket enthält nur Dateien, die für die Veröffentlichung benötigt werden.
+Diese Version ist ein direkter Ersatz für Phase 1 und funktioniert weiterhin als statische PWA auf GitHub Pages.
 
-## Enthalten
+## Neu in Version 2
 
-- `index.html`
-- `styles.css`
-- `app.js`
-- `manifest.webmanifest`
-- `service-worker.js`
-- `icons/`
-- `data/`
+- modernes responsives Layout und Dunkelmodus
+- Dashboard mit Medianpreisen und Marktvergleich
+- erweiterte Gebäude- und Anzeigenfilter
+- Sortierung nach Preis, Fläche, Baujahr und Anzahl Anzeigen
+- Gebäude-Vergleich
+- Favoriten auf Übersicht und eigener Seite
+- Links zu Karten und Quellen in den Gebäudedetails
+- aktualisierte Cache-Strategie, damit neue GitHub-Versionen schneller erscheinen
 
-## Funktionen
+## Installation / Upgrade
 
-- Gebäudesuche und Stadtteilfilter
-- Anzeigenübersicht
-- Schnellfilter nach Preis, Schlafzimmern, Etage, Meerblick und Varanda
-- Gebäudedetails und zugeordnete Anzeigen
-- Favoriten im lokalen Gerätespeicher
-- installierbar auf dem iPhone
-- Offline-Cache nach dem ersten vollständigen Laden
+1. Sicherheitskopie deines bisherigen GitHub-Repositories anlegen oder einen Branch erstellen.
+2. Alle Dateien und Ordner aus diesem Paket in das Hauptverzeichnis des Repositories hochladen.
+3. Vorhandene Dateien ersetzen; die Ordner `data` und `icons` vollständig mit hochladen.
+4. Commit erstellen, z. B. `Version 2 installieren`.
+5. Zwei bis fünf Minuten warten und die GitHub-Pages-Seite mit `Strg + F5` neu laden.
+6. Auf dem iPhone die alte Home-Bildschirm-App entfernen, die Seite in Safari öffnen und erneut über **Teilen > Zum Home-Bildschirm** installieren.
 
-## Veröffentlichung über GitHub Pages
-
-1. Ein öffentliches GitHub-Repository erstellen.
-2. **Den Inhalt dieses Ordners** direkt in das Hauptverzeichnis hochladen. `index.html` muss auf der obersten Ebene liegen.
-3. Unter `Settings > Pages` die Quelle `Deploy from a branch`, Branch `main`, Ordner `/root` wählen.
-4. Die erzeugte GitHub-Pages-Adresse in Safari öffnen.
-5. In Safari: Teilen > Zum Home-Bildschirm.
-
-Die App funktioniert nicht korrekt, wenn `index.html` nur lokal aus der Dateien-App geöffnet wird, weil Browser lokale JSON-Dateien aus Sicherheitsgründen blockieren können.
-
-## Datenhinweis
-
-Die App verwendet einen statischen Snapshot der vorhandenen Atlas-Daten. Angebotspreise sind keine tatsächlichen Verkaufspreise. Nicht verifizierte oder fehlende Angaben werden als offen angezeigt.
+Die PWA enthält aktuell 220 Gebäude und 58 Anzeigen aus dem vorhandenen Phase-1-Datenstand.

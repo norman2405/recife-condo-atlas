@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Condo Atlas">
-  <meta name="description" content="Mobiler Immobilienatlas für Piedade und Candeias.">
+  <meta name="description" content="Immobilienatlas für Piedade und Candeias: Gebäude, Angebote, Marktwerte und Favoriten.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -16,32 +16,40 @@
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <div class="eyebrow">Piedade &amp; Candeias</div>
-      <h1>Recife Condo Atlas</h1>
+    <button class="brand" data-view-target="homeView" aria-label="Übersicht öffnen">
+      <img src="icons/icon-192.png" alt="" width="42" height="42">
+      <span><small>Piedade &amp; Candeias</small><strong>Recife Condo Atlas</strong></span>
+    </button>
+    <div class="top-actions">
+      <button id="themeButton" class="icon-button" aria-label="Darstellung wechseln" title="Darstellung wechseln">◐</button>
+      <button id="installButton" class="install" hidden>Installieren</button>
     </div>
-    <button id="installButton" class="install" hidden>Installieren</button>
   </header>
 
   <main>
     <section id="homeView" class="view active">
-      <div class="hero">
+      <div class="hero panel hero-panel">
         <div>
-          <span class="badge">Phase 1</span>
-          <h2>Gebäude und Angebote schnell vergleichen</h2>
-          <p>Suche, Filter, Gebäudedetails, Favoriten und Offline-Nutzung in einer iPhone-tauglichen Web-App.</p>
+          <span class="badge">Version 2</span>
+          <h1>Dein Marktüberblick für Piedade und Candeias</h1>
+          <p>Gebäude vergleichen, Angebote filtern, Preisniveaus prüfen und Favoriten auf jedem Gerät speichern.</p>
+        </div>
+        <div class="hero-actions">
+          <button class="primary" data-view-target="buildingsView">Gebäude entdecken</button>
+          <button class="secondary" data-view-target="listingsView">Alle Anzeigen</button>
         </div>
       </div>
 
-      <div id="kpis" class="kpi-grid"></div>
+      <div id="kpis" class="kpi-grid" aria-label="Kennzahlen"></div>
 
       <section class="panel">
         <div class="section-head">
-          <div><span class="eyebrow dark">Suchprofil</span><h3>Passende Angebote</h3></div>
+          <div><span class="eyebrow">Suchprofil</span><h2>Passende Angebote</h2></div>
+          <button id="resetMatchFilters" class="text-button">Zurücksetzen</button>
         </div>
-        <div class="filters">
+        <div class="filters match-filters">
           <label>Maximalpreis
-            <input id="maxPrice" type="number" inputmode="numeric" value="800000">
+            <input id="maxPrice" type="number" inputmode="numeric" value="800000" min="0" step="10000">
           </label>
           <label>Mind. Schlafzimmer
             <input id="minBeds" type="number" inputmode="numeric" value="4" min="0">
@@ -49,38 +57,84 @@
           <label>Mind. Etage
             <input id="minFloor" type="number" inputmode="numeric" value="6" min="0">
           </label>
-          <label class="check"><input id="seaView" type="checkbox" checked> Meerblick</label>
-          <label class="check"><input id="balcony" type="checkbox" checked> Varanda</label>
+          <label class="check"><input id="seaView" type="checkbox" checked><span>Meerblick</span></label>
+          <label class="check"><input id="balcony" type="checkbox" checked><span>Varanda</span></label>
         </div>
-        <button id="showMatches" class="primary">Treffer anzeigen</button>
+        <div class="button-row"><button id="showMatches" class="primary">Treffer anzeigen</button><span id="matchPreview" class="muted"></span></div>
       </section>
 
       <section class="panel">
-        <div class="section-head"><div><span class="eyebrow dark">Aktuell</span><h3>Passende Angebote</h3></div></div>
+        <div class="section-head"><div><span class="eyebrow">Aktuell</span><h2>Beste Treffer</h2></div><button class="text-button" data-view-target="listingsView">Alle ansehen</button></div>
         <div id="homeMatches" class="card-grid"></div>
+      </section>
+
+      <section class="two-column">
+        <div class="panel">
+          <div class="section-head"><div><span class="eyebrow">Markt</span><h2>Preisspannen</h2></div></div>
+          <div id="marketBars" class="market-bars"></div>
+        </div>
+        <div class="panel">
+          <div class="section-head"><div><span class="eyebrow">Favoriten</span><h2>Merkliste</h2></div></div>
+          <div id="homeFavorites" class="compact-list"></div>
+        </div>
       </section>
     </section>
 
     <section id="buildingsView" class="view">
-      <div class="page-title"><div><span class="eyebrow dark">Atlas</span><h2>Gebäude</h2></div><span id="buildingCount" class="count"></span></div>
-      <div class="toolbar">
-        <input id="buildingSearch" type="search" placeholder="Name oder Adresse suchen">
-        <select id="buildingDistrict"><option value="">Alle Stadtteile</option><option value="Piedade">Piedade</option><option value="Candeias">Candeias</option></select>
+      <div class="page-title"><div><span class="eyebrow">Atlas</span><h1>Gebäude</h1></div><span id="buildingCount" class="count"></span></div>
+      <div class="filter-panel panel">
+        <div class="toolbar">
+          <input id="buildingSearch" type="search" placeholder="Name, Adresse oder Ausstattung suchen">
+          <select id="buildingDistrict"><option value="">Alle Stadtteile</option><option value="Piedade">Piedade</option><option value="Candeias">Candeias</option></select>
+          <select id="buildingSort"><option value="name">Name A–Z</option><option value="priceAsc">Ø Preis aufsteigend</option><option value="priceDesc">Ø Preis absteigend</option><option value="areaDesc">Größe absteigend</option><option value="yearDesc">Baujahr neu zuerst</option><option value="listingsDesc">Meiste Anzeigen</option></select>
+        </div>
+        <div class="chip-row">
+          <label class="filter-chip"><input id="buildingPool" type="checkbox"> Pool</label>
+          <label class="filter-chip"><input id="buildingFourBeds" type="checkbox"> 4+ Schlafzimmer</label>
+          <label class="filter-chip"><input id="buildingSea" type="checkbox"> Meerblick erwähnt</label>
+          <label class="filter-chip"><input id="buildingWithListings" type="checkbox"> Mit Anzeigen</label>
+        </div>
       </div>
       <div id="buildingList" class="card-grid"></div>
     </section>
 
     <section id="listingsView" class="view">
-      <div class="page-title"><div><span class="eyebrow dark">Markt</span><h2>Anzeigen</h2></div><span id="listingCount" class="count"></span></div>
-      <div class="toolbar">
-        <input id="listingSearch" type="search" placeholder="Gebäude oder Makler suchen">
-        <select id="listingDistrict"><option value="">Alle Stadtteile</option><option value="Piedade">Piedade</option><option value="Candeias">Candeias</option></select>
+      <div class="page-title"><div><span class="eyebrow">Markt</span><h1>Anzeigen</h1></div><span id="listingCount" class="count"></span></div>
+      <div class="filter-panel panel">
+        <div class="toolbar">
+          <input id="listingSearch" type="search" placeholder="Gebäude, Makler oder Quelle suchen">
+          <select id="listingDistrict"><option value="">Alle Stadtteile</option><option value="Piedade">Piedade</option><option value="Candeias">Candeias</option></select>
+          <select id="listingSort"><option value="newest">Neueste zuerst</option><option value="priceAsc">Preis aufsteigend</option><option value="priceDesc">Preis absteigend</option><option value="ppmAsc">Preis/m² aufsteigend</option><option value="areaDesc">Fläche absteigend</option></select>
+        </div>
+        <details class="advanced-filter">
+          <summary>Weitere Filter</summary>
+          <div class="filters">
+            <label>Preis bis <input id="listingMaxPrice" type="number" inputmode="numeric" min="0" placeholder="z. B. 800000"></label>
+            <label>Fläche ab <input id="listingMinArea" type="number" inputmode="numeric" min="0" placeholder="m²"></label>
+            <label>Schlafzimmer ab <input id="listingMinBeds" type="number" inputmode="numeric" min="0"></label>
+            <label>Etage ab <input id="listingMinFloor" type="number" inputmode="numeric" min="0"></label>
+            <label class="check"><input id="listingSea" type="checkbox"><span>Meerblick</span></label>
+            <label class="check"><input id="listingBalcony" type="checkbox"><span>Varanda</span></label>
+          </div>
+          <button id="resetListingFilters" class="secondary">Filter löschen</button>
+        </details>
       </div>
+      <div id="activeFilterNotice" class="active-filter-notice" hidden></div>
       <div id="listingList" class="card-grid"></div>
     </section>
 
+    <section id="compareView" class="view">
+      <div class="page-title"><div><span class="eyebrow">Analyse</span><h1>Gebäude vergleichen</h1></div></div>
+      <div class="panel compare-controls">
+        <label>Gebäude 1<select id="compareA"></select></label>
+        <span class="versus">vs.</span>
+        <label>Gebäude 2<select id="compareB"></select></label>
+      </div>
+      <div id="compareResult" class="compare-grid"></div>
+    </section>
+
     <section id="favoritesView" class="view">
-      <div class="page-title"><div><span class="eyebrow dark">Gespeichert</span><h2>Favoriten</h2></div></div>
+      <div class="page-title"><div><span class="eyebrow">Gespeichert</span><h1>Favoriten</h1></div><span id="favoriteCount" class="count"></span></div>
       <div id="favoriteList" class="card-grid"></div>
     </section>
   </main>
@@ -89,6 +143,7 @@
     <button class="tab active" data-view="homeView"><span>⌂</span>Übersicht</button>
     <button class="tab" data-view="buildingsView"><span>▦</span>Gebäude</button>
     <button class="tab" data-view="listingsView"><span>€</span>Anzeigen</button>
+    <button class="tab" data-view="compareView"><span>⇄</span>Vergleich</button>
     <button class="tab" data-view="favoritesView"><span>♥</span>Favoriten</button>
   </nav>
 
@@ -96,7 +151,6 @@
     <button id="closeDialog" class="dialog-close" aria-label="Schließen">×</button>
     <div id="detailContent"></div>
   </dialog>
-
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="app.js" defer></script>
 </body>
