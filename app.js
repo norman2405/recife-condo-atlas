@@ -99,7 +99,18 @@ document.addEventListener('click',event=>{
   const detail=event.target.closest('[data-building-detail]');if(detail)showBuilding(detail.dataset.buildingDetail);
   const listing=event.target.closest('[data-listing-detail]');if(listing)showListing(listing.dataset.listingDetail);
   const fav=event.target.closest('[data-favorite]');if(fav)toggleFavorite(fav.dataset.favorite);
-  const tab=event.target.closest('.tab');if(tab)switchView(tab.dataset.view);
+  const tab = event.target.closest('.tab');
+
+if (tab) {
+  if (tab.dataset.view === 'listingsView') {
+    currentListingFilter = null;
+    byId('listingSearch').value = '';
+    byId('listingDistrict').value = '';
+    renderListings();
+  }
+
+  switchView(tab.dataset.view);
+}
 });
 byId('buildingSearch').addEventListener('input',renderBuildings);byId('buildingDistrict').addEventListener('change',renderBuildings);
 byId('listingSearch').addEventListener('input',renderListings);byId('listingDistrict').addEventListener('change',renderListings);
