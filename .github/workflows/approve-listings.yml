@@ -1,1 +1,31 @@
+name: Genehmigte Anzeigen veröffentlichen
 
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository laden
+        uses: actions/checkout@v4
+
+      - name: Python installieren
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Genehmigte Anzeigen übernehmen
+        run: python scripts/approve_listings.py
+
+      - name: Änderungen speichern
+        run: |
+          git config user.name "condo-atlas-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/
+          git diff --cached --quiet || git commit -m "Genehmigte Anzeigen veröffentlichen"
+          git push
