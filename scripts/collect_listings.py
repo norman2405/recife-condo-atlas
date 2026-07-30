@@ -118,7 +118,7 @@ def collect_from_local_broker() -> list[dict[str, Any]]:
     Der Adapter funktioniert erst, nachdem sie an eine echte Website
     angepasst wurden.
     """
-    search_url = "https://www.beispiel-makler.de/imoveis/candeias"
+    search_url = "https://www.vivareal.com.br"
 
     headers = {
         "User-Agent": (
