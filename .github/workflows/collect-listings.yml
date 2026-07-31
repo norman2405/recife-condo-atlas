@@ -1,8 +1,6 @@
-name: Neue Anzeigen sammeln
+name: Anzeigen sammeln
 
 on:
-  schedule:
-    - cron: "15 6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -21,18 +19,24 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Abhängigkeiten installieren
+      - name: Python-Pakete installieren
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          python -m pip install requests beautifulsoup4
 
-      - name: Neue Anzeigen sammeln
+      - name: ATAÍDE Collector ausführen
         run: python scripts/collect_listings.py
 
-      - name: Änderungen speichern
+      - name: Neue Prüfkandidaten speichern
         run: |
-          git config user.name "condo-atlas-bot"
-          git config user.email "actions@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add data/pending-listings.json
-          git diff --cached --quiet || git commit -m "Neue Anzeigen zur Prüfung"
-          git push
+
+          if git diff --cached --quiet; then
+            echo "Keine neuen Anzeigen gefunden."
+          else
+            git commit -m "Neue Anzeigen zur Prüfung hinzufügen"
+            git push
+          fi
