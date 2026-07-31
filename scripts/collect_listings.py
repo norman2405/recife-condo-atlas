@@ -537,17 +537,33 @@ def main() -> None:
     new_items: list[dict[str, Any]] = []
 
     for item in collect_from_sources():
-        item["fingerprint"] = fingerprint(item)
+    item["fingerprint"] = fingerprint(item)
 
-        if item["fingerprint"] in existing:
-            continue
+    print("")
+    print("Gefundene Anzeige:")
+    print(f"  Titel: {item.get('building')}")
+    print(f"  Stadtteil: {item.get('district')}")
+    print(f"  Preis: {item.get('price')}")
+    print(f"  Schlafzimmer: {item.get('bedrooms')}")
+    print(f"  Etage: {item.get('floor')}")
+    print(f"  Varanda: {item.get('balcony')}")
+    print(f"  Meerblick: {item.get('seaView')}")
+    print(f"  URL: {item.get('sourceUrl')}")
 
-        is_candidate, warnings = evaluate_search_profile(
-            item
-        )
+    if item["fingerprint"] in existing:
+        print("  Ergebnis: bereits vorhanden")
+        continue
 
-        if not is_candidate:
-            continue
+    is_candidate, warnings = evaluate_search_profile(
+        item
+    )
+
+    if not is_candidate:
+        print("  Ergebnis: Suchprofil nicht erfüllt")
+        print(f"  Grund: {', '.join(warnings)}")
+        continue
+
+    print("  Ergebnis: wird in pending-listings.json gespeichert")
 
         item["reviewWarnings"] = warnings
         item.setdefault(
