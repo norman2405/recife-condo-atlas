@@ -2,6 +2,12 @@ name: V2-02 VivaReal Links testen
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - develop
+    paths:
+      - ".github/workflows/v2-02-vivareal-links.yml"
+      - "scripts/v2/sources/vivareal.py"
 
 permissions:
   contents: read
