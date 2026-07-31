@@ -4,6 +4,7 @@ import html
 import re
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
@@ -109,12 +110,6 @@ def extract_detail_links(page_html: str, limit: int = MAX_LINKS) -> list[str]:
 
 
 def fetch_search_page(search_url: str) -> str | None:
-    """
-    Lädt eine VivaReal-Ergebnisseite.
-
-    VivaReal kann Zugriffe aus GitHub Actions mit HTTP 403 oder 429
-    blockieren. In diesem Fall wird der Adapter sauber beendet.
-    """
     request = Request(
         search_url,
         headers={
@@ -183,6 +178,9 @@ def collect_detail_links(limit: int = MAX_LINKS) -> list[str]:
             break
 
         page_html = fetch_search_page(search_url)
+
+        if page_html is None:
+            continue
 
         for detail_url in extract_detail_links(page_html, limit=limit):
             if detail_url in seen:
