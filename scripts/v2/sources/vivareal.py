@@ -108,21 +108,66 @@ def extract_detail_links(page_html: str, limit: int = MAX_LINKS) -> list[str]:
     return result
 
 
-def fetch_search_page(url: str) -> str:
-    """Download exactly one public search-result page."""
+def fetch_search_page(search_url: str) -> str | None:
+    """
+    Lädt eine VivaReal-Ergebnisseite.
+
+    VivaReal kann Zugriffe aus GitHub Actions mit HTTP 403 oder 429
+    blockieren. In diesem Fall wird der Adapter sauber beendet.
+    """
     request = Request(
-        url,
+        search_url,
         headers={
             "User-Agent": (
-                "Mozilla/5.0 (compatible; RecifeCondoAtlas/2.0; "
-                "+https://github.com/norman2405/recife-condo-atlas)"
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/126.0.0.0 Safari/537.36"
             ),
-            "Accept-Language": "pt-BR,pt;q=0.9",
+            "Accept": (
+                "text/html,application/xhtml+xml,"
+                "application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+            ),
+            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
         },
     )
 
-    with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-        return response.read().decode("utf-8", errors="replace")
+    try:
+        with urlopen(
+            request,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        ) as response:
+            return response.read().decode(
+                "utf-8",
+                errors="replace",
+            )
+
+    except HTTPError as error:
+        if error.code == 403:
+            print(
+                "VivaReal blockiert den Zugriff aus "
+                "GitHub Actions (HTTP 403)."
+            )
+            return None
+
+        if error.code == 429:
+            print(
+                "VivaReal begrenzt die Anfragen "
+                "(HTTP 429)."
+            )
+            return None
+
+        print(
+            f"VivaReal HTTP-Fehler {error.code}: "
+            f"{search_url}"
+        )
+        return None
+
+    except URLError as error:
+        print(
+            "VivaReal Netzwerkfehler: "
+            f"{error.reason}"
+        )
+        return None
 
 
 def collect_detail_links(limit: int = MAX_LINKS) -> list[str]:
