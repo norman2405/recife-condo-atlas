@@ -1,0 +1,33 @@
+name: V2 Fundament prüfen
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+    paths:
+      - "scripts/v2/**"
+      - "tests/**"
+      - ".github/workflows/v2-foundation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository laden
+        uses: actions/checkout@v4
+
+      - name: Python installieren
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tests ausführen
+        run: python -m unittest discover -s tests -v
+
+      - name: V2 Collector im Dry-run prüfen
+        run: python scripts/v2/collect.py --dry-run
