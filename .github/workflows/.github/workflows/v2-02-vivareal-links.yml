@@ -1,0 +1,23 @@
+name: V2-02 VivaReal Links testen
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-links:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository laden
+        uses: actions/checkout@v4
+
+      - name: Python installieren
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: VivaReal Links suchen
+        run: python scripts/v2/sources/vivareal.py
