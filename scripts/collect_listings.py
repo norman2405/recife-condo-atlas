@@ -25,6 +25,20 @@ ATAIDE_SEARCH_URL = (
 ATAIDE_MAX_PAGES = 20
 REQUEST_DELAY_SECONDS = 1.0
 
+VIVAREAL_SEARCH_URLS = {
+    "Piedade": (
+        "https://www.vivareal.com.br/venda/pernambuco/"
+        "jaboatao-dos-guararapes/bairros/piedade/"
+        "apartamento_residencial/"
+    ),
+    "Candeias": (
+        "https://www.vivareal.com.br/venda/pernambuco/"
+        "jaboatao-dos-guararapes/bairros/candeias/"
+        "apartamento_residencial/"
+    ),
+}
+VIVAREAL_MAX_PAGES = 3
+
 
 def load_json(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
@@ -392,9 +406,154 @@ def collect_from_ataide() -> list[dict[str, Any]]:
     return results
 
 
+
+def extract_vivareal_detail_urls(html: str, page_url: str) -> set[str]:
+    urls: set[str] = set()
+    soup = BeautifulSoup(html, "html.parser")
+
+    for link in soup.select("a[href]"):
+        href = str(link.get("href", "")).strip()
+        if not href:
+            continue
+        absolute = urljoin(page_url, href).split("#", 1)[0]
+        lowered = absolute.lower()
+        if "vivareal.com.br" not in lowered:
+            continue
+        if "/imovel/" not in lowered:
+            continue
+        urls.add(absolute)
+
+    patterns = [
+        r'https?://www\.vivareal\.com\.br/imovel/[^"\'<>\s]+',
+        r'\/imovel\/[^"\'<>\s]+',
+    ]
+    for pattern in patterns:
+        for match in re.findall(pattern, html, flags=re.IGNORECASE):
+            candidate = match.replace("\\/", "/")
+            absolute = urljoin(page_url, candidate).split("#", 1)[0]
+            if "vivareal.com.br" in absolute.lower():
+                urls.add(absolute)
+
+    return urls
+
+
+def collect_vivareal_detail(
+    source_url: str,
+    session: requests.Session,
+    expected_district: str,
+) -> dict[str, Any] | None:
+    response = session.get(source_url, timeout=30)
+    response.raise_for_status()
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    page_text = normalize_text(soup.get_text(" ", strip=True))
+    title_element = soup.select_one("h1")
+    title = (
+        normalize_text(title_element.get_text(" ", strip=True))
+        if title_element
+        else "Apartamento VivaReal"
+    )
+
+    price = extract_number(page_text, [r"R\$\s*([\d.]+(?:,\d{1,2})?)"])
+    area = extract_number(page_text, [r"([\d.,]+)\s*m[²2]"])
+    bedrooms = extract_number(
+        page_text,
+        [r"(\d+)\s*quartos?", r"quartos?[^\d]{0,10}(\d+)"],
+    )
+    bathrooms = extract_number(
+        page_text,
+        [r"(\d+)\s*banheiros?", r"banheiros?[^\d]{0,10}(\d+)"],
+    )
+    parking = extract_number(
+        page_text,
+        [r"(\d+)\s*vagas?", r"vagas?[^\d]{0,10}(\d+)"],
+    )
+
+    district = detect_district(f"{title} {page_text}") or expected_district
+    image_urls: list[str] = []
+    for image in soup.select("img"):
+        for attribute in ("src", "data-src", "data-lazy-src"):
+            value = str(image.get(attribute, "")).strip()
+            if not value:
+                continue
+            image_url = urljoin(source_url, value)
+            if image_url.startswith("http") and image_url not in image_urls:
+                image_urls.append(image_url)
+
+    external_id_match = re.search(r"-(\d+)/?(?:\?.*)?$", source_url)
+
+    return {
+        "building": title,
+        "district": district,
+        "address": "",
+        "price": price,
+        "area": area,
+        "bedrooms": int(bedrooms) if bedrooms is not None else None,
+        "bathrooms": int(bathrooms) if bathrooms is not None else None,
+        "parkingSpaces": int(parking) if parking is not None else None,
+        "floor": detect_floor(page_text),
+        "balcony": detect_balcony(page_text),
+        "seaView": detect_sea_view(page_text),
+        "description": page_text,
+        "imageUrls": image_urls,
+        "externalId": external_id_match.group(1) if external_id_match else None,
+        "broker": "VivaReal",
+        "source": "VivaReal",
+        "sourceUrl": source_url,
+        "instagramUrl": "",
+    }
+
+
+def collect_from_vivareal() -> list[dict[str, Any]]:
+    session = make_session()
+    detail_urls: dict[str, str] = {}
+
+    for district, base_url in VIVAREAL_SEARCH_URLS.items():
+        for page_number in range(1, VIVAREAL_MAX_PAGES + 1):
+            separator = "&" if "?" in base_url else "?"
+            page_url = f"{base_url}{separator}pagina={page_number}"
+            response = session.get(page_url, timeout=30)
+            response.raise_for_status()
+
+            page_urls = extract_vivareal_detail_urls(response.text, page_url)
+            new_count = 0
+            for url in page_urls:
+                if url not in detail_urls:
+                    detail_urls[url] = district
+                    new_count += 1
+
+            print(
+                f"VivaReal {district} Seite {page_number}: "
+                f"{len(page_urls)} Links, davon {new_count} neu"
+            )
+
+            if not page_urls:
+                break
+            time.sleep(REQUEST_DELAY_SECONDS)
+
+    print(f"VivaReal: insgesamt {len(detail_urls)} Detailseiten gefunden")
+
+    results: list[dict[str, Any]] = []
+    for index, (detail_url, district) in enumerate(
+        sorted(detail_urls.items()),
+        start=1,
+    ):
+        try:
+            item = collect_vivareal_detail(detail_url, session, district)
+            if item:
+                results.append(item)
+            print(f"VivaReal Detailseite {index}/{len(detail_urls)} gelesen")
+        except requests.RequestException as error:
+            print(f"VivaReal Detailseite nicht lesbar: {detail_url}: {error}")
+
+        time.sleep(REQUEST_DELAY_SECONDS)
+
+    return results
+
+
 def collect_from_sources() -> list[dict[str, Any]]:
     all_items: list[dict[str, Any]] = []
-    adapters = [collect_from_ataide]
+    adapters = [collect_from_ataide, collect_from_vivareal]
 
     for adapter in adapters:
         try:
